@@ -309,6 +309,32 @@ function handleTemplateCache(options: Options, str?: string): CompileTemplate {
 }
 
 /**
+ * Get the template from a string or a file, either compiled on-the-fly or
+ * read from cache (if enabled), and cache the template if needed.
+ *
+ * If `str` is not set, the file specified in `options.filename` will be read.
+ *
+ * If `options.cache` is true, this function reads the file from
+ * `options.filename` so it must be set prior to calling this function.
+ *
+ * @param {Object} options
+ * @param {String=} str
+ * @return {Promise<CompileTemplate>}
+ * @api private
+ */
+async function handleTemplateCacheAsync(options: Options, str?: string): Promise<CompileTemplate> {
+  const key = options.filename!;
+  if (options.cache && cache[key]) {
+    return cache[key] as CompileTemplate;
+  } else {
+    if (str === undefined) str = await Deno.readTextFile(key);
+    const templ = compile(str, options);
+    if (options.cache) cache[key] = templ;
+    return templ;
+  }
+}
+
+/**
  * Compile a `Function` representation of the given pug `str`.
  *
  * Options:
@@ -519,6 +545,40 @@ export function renderFile(
 
   options.filename = path;
   return handleTemplateCache(options)(options);
+}
+
+/**
+ * Render a Pug file at the given `path`.
+ *
+ * @param {String} path
+ * @param {Object|Function} options or callback
+ * @param {Function|undefined} fn
+ * @returns {Promise<String>}
+ * @api public
+ */
+export async function renderFileAsync(
+  path: string,
+  options?: (Options & LocalsObject) | Callback,
+  fn?: Callback,
+): Promise<string | void> {
+  // support callback API
+  if ("function" == typeof options) {
+    (fn = options), (options = undefined);
+  }
+  if (typeof fn === "function") {
+    let res: string;
+    try {
+      res = await renderFile(path, options) as string;
+    } catch (ex) {
+      return fn(ex);
+    }
+    return fn(null, res);
+  }
+
+  options = options || {};
+
+  options.filename = path;
+  return (await handleTemplateCacheAsync(options))(options);
 }
 
 /**

@@ -1,3 +1,6 @@
 {
-  "compilerOptions": {}
+  // use es2022 as target
+  "compilerOptions": {
+    "target": "es2022"
+  }
 }
