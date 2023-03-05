@@ -568,7 +568,7 @@ export async function renderFileAsync(
   if (typeof fn === "function") {
     let res: string;
     try {
-      res = await renderFile(path, options) as string;
+      res = await renderFileAsync(path, options) as string;
     } catch (ex) {
       return fn(ex);
     }
