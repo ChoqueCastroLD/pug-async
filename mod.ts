@@ -123,12 +123,12 @@ export const filters: Record<string, Filter> = {};
  * @return {Object}
  * @api private
  */
-function compileBody(str: string, options: Options) {
+async function compileBody(str: string, options: Options) {
   const debugSources: DebugSources = {};
   debugSources[options.filename!] = str;
   const dependencies: string[] = [];
   const plugins = options.plugins || [];
-  let ast = load.string(str, {
+  let ast = await load.string(str, {
     filename: options.filename,
     basedir: options.basedir,
     lex: function (str: string, options: PluginFunctionOptions) {
@@ -215,7 +215,7 @@ function compileBody(str: string, options: Options) {
 
       return load.resolve(filename, source, loadOptions);
     },
-    read: function (filename: string, loadOptions: PluginFunctionOptions) {
+    read: async function (filename: string, loadOptions: PluginFunctionOptions) {
       dependencies.push(filename);
 
       let contents: string;
@@ -224,7 +224,7 @@ function compileBody(str: string, options: Options) {
       if (replacementFunc) {
         contents = replacementFunc(filename, options) as string;
       } else {
-        contents = load.read(filename, loadOptions);
+        contents = await load.read(filename, loadOptions);
       }
 
       debugSources[filename] = contents;
@@ -245,7 +245,7 @@ function compileBody(str: string, options: Options) {
       }
     });
   }
-  ast = handleFilters(
+  ast = await handleFilters(
     ast,
     filtersSet,
     options.filterOptions,
@@ -254,12 +254,12 @@ function compileBody(str: string, options: Options) {
 
   ast = applyPlugins(ast, options, plugins, "postFilters");
   ast = applyPlugins(ast, options, plugins, "preLink");
-  ast = link(ast);
+  ast = await link(ast);
   ast = applyPlugins(ast, options, plugins, "postLink");
 
   // Compile
   ast = applyPlugins(ast, options, plugins, "preCodeGen");
-  let js = (findReplacementFunc(plugins, "generateCode") || generateCode)(ast, {
+  let js = (await (findReplacementFunc(plugins, "generateCode") || generateCode)(ast, {
     pretty: options.pretty,
     compileDebug: options.compileDebug,
     doctype: options.doctype,
@@ -268,7 +268,7 @@ function compileBody(str: string, options: Options) {
     self: options.self,
     includeSources: options.includeSources ? debugSources : false,
     templateName: options.templateName,
-  }) as string;
+  })) as string;
   js = applyPlugins(js, options, plugins, "postCodeGen");
 
   // Debug compiler
@@ -296,13 +296,13 @@ function compileBody(str: string, options: Options) {
  * @return {Function}
  * @api private
  */
-function handleTemplateCache(options: Options, str?: string): CompileTemplate {
+async function handleTemplateCache(options: Options, str?: string): Promise<CompileTemplate> {
   const key = options.filename!;
   if (options.cache && cache[key]) {
     return cache[key] as CompileTemplate;
   } else {
-    if (str === undefined) str = Deno.readTextFileSync(key);
-    const templ = compile(str, options);
+    if (str === undefined) str = await Deno.readTextFile(key);
+    const templ = await compile(str, options);
     if (options.cache) cache[key] = templ;
     return templ;
   }
@@ -328,7 +328,7 @@ async function handleTemplateCacheAsync(options: Options, str?: string): Promise
     return cache[key] as CompileTemplate;
   } else {
     if (str === undefined) str = await Deno.readTextFile(key);
-    const templ = compile(str, options);
+    const templ = await compile(str, options);
     if (options.cache) cache[key] = templ;
     return templ;
   }
@@ -349,10 +349,10 @@ async function handleTemplateCacheAsync(options: Options, str?: string): Promise
  * @return {Function}
  * @api public
  */
-export function compile(str: string, options: Options = {}) {
+export async function compile(str: string, options: Options = {}) {
   str = String(str);
 
-  const parsed = compileBody(str, {
+  const parsed = await compileBody(str, {
     compileDebug: options.compileDebug !== false,
     filename: options.filename,
     basedir: options.basedir,
@@ -395,12 +395,12 @@ export function compile(str: string, options: Options = {}) {
  * @return {Object}
  * @api public
  */
-export function compileClientWithDependenciesTracked(
+export async function compileClientWithDependenciesTracked(
   str: string,
   options: Options = {},
 ) {
   str = String(str);
-  const parsed = compileBody(str, {
+  const parsed = await compileBody(str, {
     compileDebug: options.compileDebug,
     filename: options.filename,
     basedir: options.basedir,
@@ -445,8 +445,8 @@ export function compileClientWithDependenciesTracked(
  * @return {String}
  * @api public
  */
-export function compileClient(str: string, options: Options) {
-  return compileClientWithDependenciesTracked(str, options).body;
+export async function compileClient(str: string, options: Options) {
+  return (await compileClientWithDependenciesTracked(str, options)).body;
 }
 
 /**
@@ -463,10 +463,10 @@ export function compileClient(str: string, options: Options) {
  * @return {Function}
  * @api public
  */
-export function compileFile(path: string, options: Options) {
+export async function compileFile(path: string, options: Options) {
   options = options || {};
   options.filename = path;
-  return handleTemplateCache(options);
+  return await handleTemplateCache(options);
 }
 
 /**
@@ -484,11 +484,11 @@ export function compileFile(path: string, options: Options) {
  * @api public
  */
 
-export function render(
+export async function render(
   str: string,
   options?: (Options & LocalsObject) | Callback,
   fn?: Callback<Error, string>,
-): string | void {
+): Promise<string | void> {
   // support callback API
   if ("function" == typeof options) {
     (fn = options), (options = undefined);
@@ -496,7 +496,7 @@ export function render(
   if (typeof fn === "function") {
     let res: string;
     try {
-      res = render(str, options) as string;
+      res = (await render(str, options)) as string;
     } catch (ex) {
       return fn(ex);
     }
@@ -510,7 +510,7 @@ export function render(
     throw new Error('the "filename" option is required for caching');
   }
 
-  return handleTemplateCache(options, str)(options);
+  return  await ((await handleTemplateCache(options, str))(options));
 }
 
 /**
@@ -522,11 +522,11 @@ export function render(
  * @returns {String}
  * @api public
  */
-export function renderFile(
+export async function renderFile(
   path: string,
   options?: (Options & LocalsObject) | Callback,
   fn?: Callback,
-): string | void {
+): Promise<string | void> {
   // support callback API
   if ("function" == typeof options) {
     (fn = options), (options = undefined);
@@ -534,7 +534,7 @@ export function renderFile(
   if (typeof fn === "function") {
     let res: string;
     try {
-      res = renderFile(path, options) as string;
+      res = (await renderFile(path, options)) as string;
     } catch (ex) {
       return fn(ex);
     }
@@ -544,7 +544,7 @@ export function renderFile(
   options = options || {};
 
   options.filename = path;
-  return handleTemplateCache(options)(options);
+  return await ((await handleTemplateCache(options))(options));
 }
 
 /**
@@ -589,7 +589,7 @@ export async function renderFileAsync(
  * @returns {String}
  * @api public
  */
-export function compileFileClient(path: string, options: Options): string {
+export async function compileFileClient(path: string, options: Options): Promise<string> {
   const key = path + ":client";
   options = options || {};
 
@@ -600,9 +600,9 @@ export function compileFileClient(path: string, options: Options): string {
   }
 
   const decoder = new TextDecoder("utf-8");
-  const data = Deno.readFileSync(options.filename);
+  const data = await Deno.readFile(options.filename);
   const str = decoder.decode(data);
-  const out = compileClient(str, options);
+  const out = await compileClient(str, options);
   if (options.cache) cache[key] = out;
   return out;
 }

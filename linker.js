@@ -6,7 +6,7 @@ function error() {
   throw err.apply(null, arguments);
 }
 
-export default function link(ast) {
+export default async function link(ast) {
   assert(
     ast.type === "Block",
     "The top level element should always be a block",
@@ -14,13 +14,13 @@ export default function link(ast) {
   var extendsNode = null;
   if (ast.nodes.length) {
     var hasExtends = ast.nodes[0].type === "Extends";
-    checkExtendPosition(ast, hasExtends);
+    await checkExtendPosition(ast, hasExtends);
     if (hasExtends) {
       extendsNode = ast.nodes.shift();
     }
   }
-  ast = applyIncludes(ast);
-  ast.declaredBlocks = findDeclaredBlocks(ast);
+  ast = await applyIncludes(ast);
+  ast.declaredBlocks = await findDeclaredBlocks(ast);
   if (extendsNode) {
     var mixins = [];
     var expectedBlocks = [];
@@ -39,10 +39,10 @@ export default function link(ast) {
         );
       }
     });
-    var parent = link(extendsNode.file.ast);
-    extend(parent.declaredBlocks, ast);
+    var parent = await link(extendsNode.file.ast);
+    await extend(parent.declaredBlocks, ast);
     var foundBlockNames = [];
-    walk(parent, function (node) {
+    await walk(parent, function (node) {
       if (node.type === "NamedBlock") {
         foundBlockNames.push(node.name);
       }
@@ -66,9 +66,9 @@ export default function link(ast) {
   return ast;
 }
 
-function findDeclaredBlocks(ast) /*: {[name: string]: Array<BlockNode>}*/ {
+async function findDeclaredBlocks(ast) /*: {[name: string]: Array<BlockNode>}*/ {
   var definitions = {};
-  walk(ast, function before(node) {
+  await walk(ast, function before(node) {
     if (node.type === "NamedBlock" && node.mode === "replace") {
       definitions[node.name] = definitions[node.name] || [];
       definitions[node.name].push(node);
@@ -88,9 +88,9 @@ function flattenParentBlocks(parentBlocks, accumulator) {
   return accumulator;
 }
 
-function extend(parentBlocks, ast) {
+async function extend(parentBlocks, ast) {
   var stack = {};
-  walk(
+  await walk(
     ast,
     function before(node) {
       if (node.type === "NamedBlock") {
@@ -127,27 +127,27 @@ function extend(parentBlocks, ast) {
   );
 }
 
-function applyIncludes(ast, child) {
-  return walk(
+async function applyIncludes(ast, child) {
+  return await walk(
     ast,
     function before(node, replace) {
       if (node.type === "RawInclude") {
         replace({ type: "Text", val: node.file.str.replace(/\r/g, "") });
       }
     },
-    function after(node, replace) {
+    async function after(node, replace) {
       if (node.type === "Include") {
-        var childAST = link(node.file.ast);
+        var childAST = await link(node.file.ast);
         if (childAST.hasExtends) {
-          childAST = removeBlocks(childAST);
+          childAST = await removeBlocks(childAST);
         }
-        replace(applyYield(childAST, node.block));
+        replace(await applyYield(childAST, node.block));
       }
     },
   );
 }
-function removeBlocks(ast) {
-  return walk(ast, function (node, replace) {
+async function removeBlocks(ast) {
+  return await walk(ast, function (node, replace) {
     if (node.type === "NamedBlock") {
       replace({
         type: "Block",
@@ -157,10 +157,10 @@ function removeBlocks(ast) {
   });
 }
 
-function applyYield(ast, block) {
+async function applyYield(ast, block) {
   if (!block || !block.nodes.length) return ast;
   var replaced = false;
-  ast = walk(ast, null, function (node, replace) {
+  ast = await walk(ast, null, function (node, replace) {
     if (node.type === "YieldBlock") {
       replaced = true;
       node.type = "Block";
@@ -186,9 +186,9 @@ function applyYield(ast, block) {
   return ast;
 }
 
-function checkExtendPosition(ast, hasExtends) {
+async function checkExtendPosition(ast, hasExtends) {
   var legitExtendsReached = false;
-  walk(ast, function (node) {
+  await walk(ast, function (node) {
     if (node.type === "Extends") {
       if (hasExtends && !legitExtendsReached) {
         legitExtendsReached = true;

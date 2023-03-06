@@ -1,11 +1,11 @@
 import { dirname, join } from "./deps.js";
 import walk from "./walk.js";
 
-export default function load(ast, options) {
+export default async function load(ast, options) {
   options = getOptions(options);
   // clone the ast
   ast = JSON.parse(JSON.stringify(ast));
-  return walk(ast, function (node) {
+  return await walk(ast, async function (node) {
     if (node.str === undefined) {
       if (
         node.type === "Include" ||
@@ -20,7 +20,7 @@ export default function load(ast, options) {
         try {
           path = options.resolve(file.path, file.filename, options);
           file.fullPath = path;
-          raw = options.read(path, options);
+          raw = await options.read(path, options);
           str = raw.toString("utf8");
         } catch (ex) {
           ex.message += "\n    at " + node.filename + " line " + node.line;
@@ -29,7 +29,7 @@ export default function load(ast, options) {
         file.str = str;
         file.raw = raw;
         if (node.type === "Extends" || node.type === "Include") {
-          file.ast = load.string(
+          file.ast = await load.string(
             str,
             Object.assign({}, options, {
               filename: path,
@@ -41,20 +41,20 @@ export default function load(ast, options) {
   });
 }
 
-load.string = function loadString(src, options) {
+load.string = async function loadString(src, options) {
   options = Object.assign(getOptions(options), {
     src: src,
   });
   var tokens = options.lex(src, options);
   var ast = options.parse(tokens, options);
-  return load(ast, options);
+  return await load(ast, options);
 };
-load.file = function loadFile(filename, options) {
+load.file = async function loadFile(filename, options) {
   options = Object.assign(getOptions(options), {
     filename: filename,
   });
-  var str = options.read(filename).toString("utf8");
-  return load.string(str, options);
+  var str = await options.read(filename).toString("utf8");
+  return await load.string(str, options);
 };
 
 load.resolve = function resolve(filename, source, options) {
@@ -78,8 +78,8 @@ load.resolve = function resolve(filename, source, options) {
 
   return filename;
 };
-load.read = function read(filename, options) {
-  return Deno.readTextFileSync(filename);
+load.read = async function read(filename, options) {
+  return await Deno.readTextFile(filename);
 };
 
 load.validateOptions = function validateOptions(options) {

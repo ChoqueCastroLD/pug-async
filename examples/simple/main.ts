@@ -1,4 +1,4 @@
-import { compile, Options, render, renderFile } from "../../mod.ts";
+import { compile, Options, render, renderFile, renderFileAsync } from "../../mod.ts";
 
 const __dirname = new URL(".", import.meta.url).pathname;
 
@@ -12,17 +12,8 @@ const options: Options = {
   pretty: true,
 };
 
-// compile
-const fn = compile("h1#title Pug - node template engine is #{state}", options);
-let html = fn(locals);
-console.log("compile result:\n", html);
-
-// render
-html = render("p.text Hello World!", { ...options, ...locals }) as string;
-console.log("\nrender result:\n", html);
-
 // renderFile
-html = renderFile(__dirname + "/template.pug", {
+let html = await renderFileAsync('C:/Users/ShokoCC/Desktop/pug-async/examples/simple/template.pug', {
   ...options,
   ...locals,
 }) as string;

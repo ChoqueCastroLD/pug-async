@@ -26,8 +26,8 @@ var INTERNAL_VARIABLES = [
   "pug_html",
 ];
 
-export default function generateCode(ast, options) {
-  return new Compiler(ast, options).compile();
+export default async function generateCode(ast, options) {
+  return await ((new Compiler(ast, options)).compile());
 }
 
 generateCode.CodeGenerator = Compiler;
